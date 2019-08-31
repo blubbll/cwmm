@@ -76,18 +76,16 @@ const getCDNfiles = () => new Promise((resolve, reject) => {
             c.listSafe((err, list) => {
                 if (err) return reject(err);
 
-                console.log(`[FTP] Listing songs...`)
+                console.log(`[FTP-query] Listing songs...`)
               
               var files = [];
               for(const i in list){
-                const fname = Buffer.from(list[i].name).toString('base64');
-                const entry = `https://${process.env.CDN}/${getDate()}/${fname}`;
+                const entry = `https://${process.env.CDN}/${getDate()}/${list[i].name}`;
                 files.push(entry)
               }
                resolve(files);
             });
             c.end(); //end client
-
            
         });
     });
@@ -118,7 +116,8 @@ const get = async (song) => new Promise((resolve, reject) => {
 
         console.log(`[TMP] Writing °${song.name}° to disk...`);
 
-        var stream = file.pipe(fs.createWriteStream(`tmp/${song.name}.mp3`));
+        const fname = Buffer.from(song.name).toString('base64')
+        var stream = file.pipe(fs.createWriteStream(`tmp/${fname}.mp3`));
 
         stream.on("error", (err) => {
             reject(err);
@@ -127,12 +126,13 @@ const get = async (song) => new Promise((resolve, reject) => {
 
             console.log(`[TMP] Written °${song.name}° to disk...`);
 
+            
             await upload({
                 host: process.env.FTP_HOST,
                 port: 21,
                 user: process.env.FTP_USER,
                 password: process.env.FTP_PASS,
-            }, `tmp/${song.name}.mp3`, `${getDate()}/${song.name}.mp3`);
+            }, `tmp/${fname}.mp3`, `${getDate()}/${fname}.mp3`);
             resolve();
         });
     })
@@ -151,13 +151,13 @@ const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Pro
     var c = new Client();
     //on client ready, upload the file.
     c.on('ready', () => {
-        console.log(`[FTP] Upload of ${pathToLocalFile} began...`)
+        console.log(`[FTP-upload] Upload of °${pathToLocalFile}° began...`)
         c.put(pathToLocalFile, pathToRemoteFile, function(err) {
             c.end(); //end client
             fs.unlink(pathToLocalFile, (error) => {
                 /* handle error */
             });
-            console.log(`[FTP] Upload completed: ${pathToLocalFile} => ${pathToRemoteFile}`)
+            console.log(`[FTP-upload] Upload completed: °${pathToLocalFile}° => °${pathToRemoteFile}°`)
             if (err) reject(err); //reject promise
             resolve(); //fullfill promise
         });
@@ -169,6 +169,7 @@ const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Pro
     c.connect(options);
 });
 
+//Delete a song object frtom the AI server
 const deleteSong = (song => new Promise(async (resolve, reject) => {
     request({
         url: `https://${process.env.HOST}/composition/delete`,
@@ -191,6 +192,8 @@ const deleteSong = (song => new Promise(async (resolve, reject) => {
         }
     });
 }));
+
+//Create a new Song on AI server
 const create = () => new Promise(async (resolve, reject) => {
     if (quota.get() < quota.hourly)
         request({
@@ -219,6 +222,7 @@ const create = () => new Promise(async (resolve, reject) => {
                 console.log(`[AI] #${song._id} (${song.name}) is getting created...`);
                 quota.add();
                 resolve();
+                setTimeout(pumpSongs, 9999);
             } else {
                 console.error(`[WARNING] ${error}`);
                 return reject(error);
@@ -228,15 +232,14 @@ const create = () => new Promise(async (resolve, reject) => {
         console.log("[WARNING] Hourly quota reached.");
         setTimeout(() => {
             quota.reset();
-
         }, 1000 * 60 * (60));
     }
 });
 
+//Process songs on AI Server
 const pumpSongs = () => {
-
     console.log(`[PUMPER] Refreshing state... [Creation Quota: ${quota.get()}/${quota.hourly} for hour ${getHour()}]`)
-
+    //get songs
     request({
         url: `https://${process.env.HOST}/folder/getContent`,
         method: 'POST',
@@ -251,7 +254,7 @@ const pumpSongs = () => {
         }
     }, async (error, res, json) => {
         console.log("[PUMPER] Processing songs...")
-        var i = 0;
+        //if songs have been generated already
         if (json.compositions && json.compositions.length > 0) {
             //Songs löschen
             for (var key in json.compositions) {
@@ -261,13 +264,8 @@ const pumpSongs = () => {
                 if (song.isFinished) { //done
                     await get(song);
                     await deleteSong(song);
-                    i++;
-
-                    if (i === json.compositions) {
-                        console.log("[PUMPER] Songs have been updated.");
-                        setTimeout(pumpSongs, 9999);
-                    }
                 }
+                 setTimeout(pumpSongs, 31999);
             }
         } else create(); //create new if not existing
     });
