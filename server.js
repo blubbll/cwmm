@@ -18,22 +18,27 @@ if (typeof localStorage === "undefined" || localStorage === null) {
 const getDate = () => {
     return new Date().toISOString().slice(0, 10).replace(/-/g, '')
 };
+const getHour = () =>{
+  return `${getDate()}${new Date().toISOString().split("T")[1].slice(0, 2)}`;
+}
 const quota = {
+    max: 40,
     set: (c) => {
-        localStorage.setItem(`dls_${getDate()}`, c);
+        localStorage.setItem(`dls_${getHour()}`, c);
     },
     get: () => {
-        return localStorage.getItem(`dls_${getDate()}`)
+        return localStorage.getItem(`dls_${getHour()}`)
     },
     add: () => {
-        let c = localStorage.getItem(`dls_${getDate()}`);
-        localStorage.setItem(`dls_${getDate()}`, (+c) + 1);
+        let c = localStorage.getItem(`dls_${getHour()}`);
+        localStorage.setItem(`dls_${getHour()}`, (+c) + 1);
     },
     substract: () => {
-        let c = localStorage.getItem(`dls_${getDate()}`);
-        localStorage.setItem(`dls_${getDate()}`, (+c) - 1);
+        let c = localStorage.getItem(`dls_${getHour()}`);
+        localStorage.setItem(`dls_${getHour()}`, (+c) - 1);
     }
 }
+
 // http://expressjs.com/en/starter/static-files.html
 app.use(express.static('public'));
 // http://expressjs.com/en/starter/basic-routing.html
@@ -85,7 +90,7 @@ const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Pro
     var c = new Client();
     //on client ready, upload the file.
     c.on('ready', () => {
-        console.log(`[start]uploading ${pathToLocalFile} => ${pathToRemoteFile}`)
+        console.log(`[FTP] uploading ${pathToLocalFile} => ${pathToRemoteFile}`)
         c.put(pathToLocalFile, pathToRemoteFile, function(err) {
             c.end(); //end client
             fs.unlink(pathToLocalFile, (error) => {
@@ -126,7 +131,7 @@ const deleteSong = (song => new Promise(async (resolve, reject) => {
 }));
 //create a new song
 const create = () => new Promise(async (resolve, reject) => {
-    if (quota.get() < 200)
+    if (quota.get() < quota.max)
         request({
             url: `https://${process.env.HOST}/composition/original/createFromPreset`,
             method: 'POST',
@@ -151,7 +156,7 @@ const create = () => new Promise(async (resolve, reject) => {
             if (error === null) {
                 if (body.compositions) {
                     const song = body.compositions[0];
-                    console.log(`[AI] #${song._id} (${song.name}) wird erstellt`);
+                    console.log(`[AI] Generating '(${song.name})' (${song._id})...`);
                     quota.add();
                     resolve();
                 } else {
@@ -172,7 +177,7 @@ const create = () => new Promise(async (resolve, reject) => {
 });
 //pumpworker
 const pumpSongs = () => {
-    console.log("[PUMPER] getting status...")
+    console.log(`[PUMPER] getting status... (Quota: ${quota.get()}/${quota.max}).`)
     request({
         url: `https://${process.env.HOST}/folder/getContent`,
         method: 'POST',
