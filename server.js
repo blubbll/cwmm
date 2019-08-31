@@ -1,5 +1,6 @@
 // server.js
 // where your node app starts
+
 // init project
 const express = require('express');
 const app = express();
@@ -7,48 +8,57 @@ const fetch = require("node-fetch")
 const request = require("request")
 const fs = require("fs")
 const LocalStorage = require("node-localstorage").LocalStorage;
+
 //ls
 if (typeof localStorage === "undefined" || localStorage === null) {
     localStorage = new LocalStorage('./scratch');
 }
+
 //create required directories
 ["./tmp"].forEach(async dir => {
     fs.existsSync(dir) || fs.mkdirSync(dir);
 });
+
 const getDate = () => {
     return new Date().toISOString().slice(0, 10).replace(/-/g, '')
 };
-const getHour = () =>{
-  return `${getDate()}${new Date().toISOString().split("T")[1].slice(0, 2)}`;
+
+const getHour = () => {
+  return `${getDate()}${new Date().toISOString().split("T")[1].slice(0, 5).replace(/:/g, '')}`;
 }
+
 const quota = {
-    max: 40,
+    hourly: 40,
     set: (c) => {
-        localStorage.setItem(`dls_${getHour()}`, c);
+        localStorage.setItem('quota', c);
+    },
+    reset: () => {
+      localStorage.setItem('quota', 0);
     },
     get: () => {
-        return localStorage.getItem(`dls_${getHour()}`)
+        return localStorage.getItem('quota')
     },
     add: () => {
-        let c = localStorage.getItem(`dls_${getHour()}`);
-        localStorage.setItem(`dls_${getHour()}`, (+c) + 1);
+        let c = localStorage.getItem('quota');
+        localStorage.setItem('quota', (+c) + 1);
     },
     substract: () => {
-        let c = localStorage.getItem(`dls_${getHour()}`);
-        localStorage.setItem(`dls_${getHour()}`, (+c) - 1);
+        let c = localStorage.getItem('quota');
+        localStorage.setItem('quota', (+c) - 1);
     }
 }
 
-// http://expressjs.com/en/starter/static-files.html
 app.use(express.static('public'));
-// http://expressjs.com/en/starter/basic-routing.html
+
 app.get('/', function(request, response) {
     response.sendFile(__dirname + '/views/index.html');
 });
+
 // listen for requests :)
 const listener = app.listen(process.env.PORT, function() {
     console.log('Your app is listening on port ' + listener.address().port);
 });
+
 const get = async (song) => new Promise((resolve, reject) => {
     request({
         url: `https://${process.env.HOST}/composition/play`,
@@ -61,13 +71,18 @@ const get = async (song) => new Promise((resolve, reject) => {
             compositionID: song._id
         }
     }).on('response', async file => {
-        console.log(`[DISK] Writing '${song.name}' to tmpdisk...`);
-        var stream = file.pipe(fs.createWriteStream(`tmp/${song.name}.mp3`));
+      
+        console.log(`[TMP] Writing °${song.name}° to disk...`);
+      
+        var stream= file.pipe(fs.createWriteStream(`tmp/${song.name}.mp3`));
+
         stream.on("error", (err) => {
             reject(err);
         });
         stream.on("finish", async () => {
-            console.log(`[DISK] Written ${song.name} to temporary dir...`);
+
+            console.log(`[TMP] Written ${song.name} to disk...`);
+          
             await upload({
                 host: process.env.FTP_HOST,
                 port: 21,
@@ -76,8 +91,10 @@ const get = async (song) => new Promise((resolve, reject) => {
             }, `tmp/${song.name}.mp3`, `${getDate()}/${song.name}.mp3`);
             resolve();
         });
-    });
+    })
 });
+
+
 //************ FTP custom (requires 'ftp')
 const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Promise((resolve, reject) => {
     var Client = require('ftp');
@@ -90,13 +107,13 @@ const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Pro
     var c = new Client();
     //on client ready, upload the file.
     c.on('ready', () => {
-        console.log(`[FTP] uploading ${pathToLocalFile} => ${pathToRemoteFile}`)
+        console.log(`[start]uploading ${pathToLocalFile} => ${pathToRemoteFile}`)
         c.put(pathToLocalFile, pathToRemoteFile, function(err) {
             c.end(); //end client
             fs.unlink(pathToLocalFile, (error) => {
                 /* handle error */
             });
-            console.log(`[FTP] uploaded ${pathToLocalFile} => ${pathToRemoteFile}`)
+            console.log(`[done]uploaded ${pathToLocalFile} => ${pathToRemoteFile}`)
             if (err) reject(err); //reject promise
             resolve(); //fullfill promise
         });
@@ -107,7 +124,7 @@ const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Pro
     });
     c.connect(options);
 });
-//delete song
+
 const deleteSong = (song => new Promise(async (resolve, reject) => {
     request({
         url: `https://${process.env.HOST}/composition/delete`,
@@ -120,8 +137,9 @@ const deleteSong = (song => new Promise(async (resolve, reject) => {
             compositionID: song._id
         }
     }, (error, response, result) => {
+
         if (error === null) {
-            console.log(`[AI] '${song.name}' was deleted.`);
+            console.log(`${song.name} wurde gelöscht`);
             resolve();
         } else {
             console.error(error);
@@ -129,9 +147,8 @@ const deleteSong = (song => new Promise(async (resolve, reject) => {
         }
     });
 }));
-//create a new song
 const create = () => new Promise(async (resolve, reject) => {
-    if (quota.get() < quota.max)
+    if (quota.get() < quota.hourly)
         request({
             url: `https://${process.env.HOST}/composition/original/createFromPreset`,
             method: 'POST',
@@ -152,32 +169,30 @@ const create = () => new Promise(async (resolve, reject) => {
                 timeSignature: "auto",
                 token: process.env.TOKEN
             }
-        }, async (error, response, body) => {
+        }, (error, response, body) => {
             if (error === null) {
-                if (body.compositions) {
-                    const song = body.compositions[0];
-                    console.log(`[AI] Generating '(${song.name})' (${song._id})...`);
-                    quota.add();
-                    resolve();
-                } else {
-                    console.warn(body);
-                    
-                    if(body.result === 0)
-                      console.log(`[WARNING] ${body.message}`);
-                   
-                    reject(body.message);
-                }
+                const song = body.compositions[0];
+                console.log(`#${song._id} (${song.name}) wird erstellt`);
+                quota.add();
+                resolve();
             } else {
-                console.error(error);
-                setTimeout(pumpSongs, (60 * 1000) * 60);//Stunde warten
+                console.error(`[WARNING] ${error}`);
                 return reject(error);
             }
         });
-    else console.log("[WARNING] Daily quota reached.")
+    else {
+      console.log("[WARNING] Hourly quota reached.");
+       setTimeout(() => {
+         quota.reset();
+         
+       }, 1000 * 60 * (60));
+    }
 });
-//pumpworker
+
 const pumpSongs = () => {
-    console.log(`[PUMPER] getting status... (Quota: ${quota.get()}/${quota.max}).`)
+
+    console.log(`[PUMPER] Refreshing state... Creation Quota: ${quota.get()} / ${quota.hourly}`)
+
     request({
         url: `https://${process.env.HOST}/folder/getContent`,
         method: 'POST',
@@ -191,24 +206,27 @@ const pumpSongs = () => {
             token: process.env.TOKEN
         }
     }, async (error, res, json) => {
-        console.log("[PUMPER] pumping songs...")
+        console.log("[PUMPER] Processing songs...")
         var i = 0;
-        if (json.compositions.length > 0) {
+        if (json.compositions && json.compositions.length > 0) {
             //Songs löschen
             for (var key in json.compositions) {
                 const song = json.compositions[key];
-                console.log(`[AI] deleting '${song.name}'...`)
+                console.log(`[AI] deleting °${song.name}°...`)
+
                 if (song.isFinished) { //done
                     await get(song);
                     await deleteSong(song);
                     i++;
+
                     if (i === json.compositions) {
-                        console.log("[PUMPER] all available songs have been pumped.");
+                        console.log("[PUMPER] Songs have been updated.");
+                        setTimeout(pumpSongs, 9999);
                     }
                 }
             }
-        } else await create(); //create new if not existing
-        setTimeout(pumpSongs, 999);
+        } else create(); //create new if not existing
     });
 };
-pumpSongs();
+
+setTimeout(pumpSongs, 9999);
