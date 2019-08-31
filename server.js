@@ -184,7 +184,7 @@ const deleteSong = (song => new Promise(async (resolve, reject) => {
     }, (error, response, result) => {
 
         if (error === null) {
-            console.log(`[AI] °${song.name}° was deleted on generating server.`);
+            console.log(`[AI] °${song.name}° was deleted on generating server.✔️`);
             resolve();
         } else {
             console.error(error);
@@ -266,7 +266,6 @@ const pumpSongs = () => {
                     await get(song);
                     console.log(`[AI] deleting °${song.name}°...`)
                     await deleteSong(song);
-
                 }
                 setTimeout(pumpSongs, 31999);
             }
