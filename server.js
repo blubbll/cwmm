@@ -14,6 +14,10 @@ if (typeof localStorage === "undefined" || localStorage === null) {
     localStorage = new LocalStorage('./scratch');
 }
 
+//create required directories
+["./tmp"].forEach(async dir => {
+    fs.existsSync(dir) || fs.mkdirSync(dir);
+});
 
 const getDate = () => {
     return new Date().toISOString().slice(0, 10).replace(/-/g, '')
@@ -49,7 +53,7 @@ const listener = app.listen(process.env.PORT, function() {
     console.log('Your app is listening on port ' + listener.address().port);
 });
 
-const get = async (file) => new Promise((resolve, reject) => {
+const get = async (song) => new Promise((resolve, reject) => {
     request({
         url: `https://${process.env.HOST}/composition/play`,
         method: 'POST',
@@ -58,21 +62,31 @@ const get = async (file) => new Promise((resolve, reject) => {
             'Authorization': process.env.TOKEN
         },
         json: {
-            compositionID: file
+            compositionID: song._id
         }
-    }, (error, response, body) => {
+    }).on('response', async stream => {
+      
+        console.log(`Writing ${song.name} to tmpdisk...`);
+      
+        stream.pipe(fs.createWriteStream(`tmp/${song.name}.mp3`));
 
-    }).on('response', async response => {
-        response.pipe(fs.createWriteStream(`tmp/${file}.mp3`));
+        stream.on("error", (err) => {
+            reject(err);
+        });
+        stream.on("finish", async () => {
 
-        await upload({
-            host: process.env.FTP_HOST,
-            port: 21,
-            user: process.env.FTP_USER,
-            password: process.env.FTP_PASS,
-        }, getDate(), `${file}.mp3`);
+            await upload({
+                host: process.env.FTP_HOST,
+                port: 21,
+                user: process.env.FTP_USER,
+                password: process.env.FTP_PASS,
+            }, `tmp/${song.name}.mp3`, `${getDate()}/${song.name}.mp3`);
 
-        resolve();
+            resolve();
+        });
+
+
+
 
     })
     //}).pipe(fs.createWriteStream(`${getDate()}/${file}.mp3`))
@@ -111,7 +125,7 @@ const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Pro
     c.connect(options);
 });
 
-const deleteSong = (id => new Promise(async (resolve, reject) => {
+const deleteSong = (song => new Promise(async (resolve, reject) => {
     request({
         url: `https://${process.env.HOST}/composition/delete`,
         method: 'POST',
@@ -120,9 +134,9 @@ const deleteSong = (id => new Promise(async (resolve, reject) => {
             'Authorization': process.env.TOKEN
         },
         json: {
-            compositionID: id
+            compositionID: song._id
         }
-    }, (error, response, song) => {
+    }, (error, response, result) => {
 
         if (error === null) {
             console.log(`${song.name} wurde gelöscht`);
@@ -162,19 +176,18 @@ const create = () => new Promise(async (resolve, reject) => {
                 console.log(`#${song._id} (${song.name}) wird erstellt`);
                 quota.add();
                 resolve();
+            } else {
+                console.error(error);
+                return reject(error);
             }
-          else {
-            console.error(error);
-            return reject(error);
-        }
         });
     else console.log("Daily quota reached.")
 });
 
 const pumpSongs = () => {
-  
-   console.log("geting status...")
-  
+
+    console.log("geting status...")
+
     request({
         url: `https://${process.env.HOST}/folder/getContent`,
         method: 'POST',
@@ -188,37 +201,28 @@ const pumpSongs = () => {
             token: process.env.TOKEN
         }
     }, async (error, res, json) => {
-        console.log(res)
         console.log("pumping songs")
-
         var i = 0;
+        if (json.compositions.length > 0) {
+            //Songs löschen
+            for (var key in json.compositions) {
+                const song = json.compositions[key];
+                console.log(`deleting ${song.name}`)
 
-        if(json.compositions.length>1)
-        //Songs löschen
-        for (var key in json.compositions) {
-            const song = json.compositions[key];
-            console.log(`deleting ${song.name}`)
+                if (song.isFinished) { //done
 
-            if (song.isFinished) //done
+                    await get(song);
 
-                await upload({
-                  host: process.env.FTP_HOST,
-                  port: 21,
-                  user: process.env.FTP_USER,
-                  password: process.env.FTP_PASS,
-              }, getDate(), `${song.name}.mp3`);
-          
-                await deleteSong(song._id);
-          
-          i++;
-          
-          if(i === json.compositions){
-            console.log("all old songs have been uploaded.");
-            
-            create();
-            
-          }
-          
+                    await deleteSong(song);
+
+                    i++;
+
+                    if (i === json.compositions) {
+                        console.log("all old songs have been uploaded.");
+                        create();
+                    }
+                }
+            }
         } else create(); //create new if not existing
     });
 };
