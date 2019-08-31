@@ -50,12 +50,12 @@ const quota = {
 
 app.use(express.static('public'));
 
-app.get('/', function(request, response) {
-    response.sendFile(__dirname + '/views/index.html');
+app.get('/', (req, res) => {
+    res.sendFile(__dirname + '/views/index.html');
 });
 
 app.get('/daily', async (req, res) => {
-    await getCDNfiles();
+    res.json(await getCDNfiles());
 });
 
 const getCDNfiles = () => new Promise((resolve, reject) => {
@@ -71,14 +71,25 @@ const getCDNfiles = () => new Promise((resolve, reject) => {
     //on client ready, upload the file.
     c.on('ready', () => {
 
-        c.listSafe((err, list) => {
-            if (err) return reject(err);
+        c.cwd(getDate(), (err, list) => {
 
-            console.log(`[FTP] Listing songs...`)
-            console.log(list);
+            c.listSafe((err, list) => {
+                if (err) return reject(err);
+
+                console.log(`[FTP] Listing songs...`)
+              
+              var files = [];
+              for(const i in list){
+                const fname = Buffer.from(list[i].name).toString('base64');
+                const entry = `https://${process.env.CDN}/${getDate()}/${fname}`;
+                files.push(entry)
+              }
+               resolve(files);
+            });
+            c.end(); //end client
+
+           
         });
-        c.end(); //end client
-        resolve();
     });
     //general error
     c.on('error', (err) => {
