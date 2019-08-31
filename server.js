@@ -24,7 +24,7 @@ const getDate = () => {
 };
 
 const getHour = () => {
-  return `${getDate()}${new Date().toISOString().split("T")[1].slice(0, 2)}`;
+    return `${getDate()}${new Date().toISOString().split("T")[1].slice(0, 2)}`;
 }
 
 const quota = {
@@ -33,7 +33,7 @@ const quota = {
         localStorage.setItem('quota', c);
     },
     reset: () => {
-      localStorage.setItem('quota', 0);
+        localStorage.setItem('quota', 0);
     },
     get: () => {
         return localStorage.getItem('quota')
@@ -54,6 +54,39 @@ app.get('/', function(request, response) {
     response.sendFile(__dirname + '/views/index.html');
 });
 
+app.get('/daily', async (req, res) => {
+    await getCDNfiles();
+});
+
+const getCDNfiles = () => new Promise((resolve, reject) => {
+    console.log(`[FTP] getting songs...`)
+    var Client = require('ftp');
+    var options = {
+        host: process.env.FTP_HOST,
+        port: 21,
+        user: process.env.FTP_USER,
+        password: process.env.FTP_PASS_RO
+    };
+    var c = new Client();
+    //on client ready, upload the file.
+    c.on('ready', () => {
+
+        c.listSafe((err, list) => {
+            if (err) return reject(err);
+
+            console.log(`[FTP] Listing songs...`)
+            console.log(list);
+        });
+        c.end(); //end client
+        resolve();
+    });
+    //general error
+    c.on('error', (err) => {
+        return reject(err);
+    });
+    c.connect(options);
+});
+
 // listen for requests :)
 const listener = app.listen(process.env.PORT, function() {
     console.log('Your app is listening on port ' + listener.address().port);
@@ -71,18 +104,18 @@ const get = async (song) => new Promise((resolve, reject) => {
             compositionID: song._id
         }
     }).on('response', async file => {
-      
+
         console.log(`[TMP] Writing °${song.name}° to disk...`);
-      
-        var stream= file.pipe(fs.createWriteStream(`tmp/${song.name}.mp3`));
+
+        var stream = file.pipe(fs.createWriteStream(`tmp/${song.name}.mp3`));
 
         stream.on("error", (err) => {
             reject(err);
         });
         stream.on("finish", async () => {
 
-            console.log(`[TMP] Written ${song.name} to disk...`);
-          
+            console.log(`[TMP] Written °${song.name}° to disk...`);
+
             await upload({
                 host: process.env.FTP_HOST,
                 port: 21,
@@ -107,7 +140,7 @@ const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Pro
     var c = new Client();
     //on client ready, upload the file.
     c.on('ready', () => {
-        console.log(`[FTP] upload of ${pathToLocalFile} began...`)
+        console.log(`[FTP] Upload of ${pathToLocalFile} began...`)
         c.put(pathToLocalFile, pathToRemoteFile, function(err) {
             c.end(); //end client
             fs.unlink(pathToLocalFile, (error) => {
@@ -181,11 +214,11 @@ const create = () => new Promise(async (resolve, reject) => {
             }
         });
     else {
-      console.log("[WARNING] Hourly quota reached.");
-       setTimeout(() => {
-         quota.reset();
-         
-       }, 1000 * 60 * (60));
+        console.log("[WARNING] Hourly quota reached.");
+        setTimeout(() => {
+            quota.reset();
+
+        }, 1000 * 60 * (60));
     }
 });
 
