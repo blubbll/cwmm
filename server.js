@@ -64,24 +64,26 @@ const get = async (song) => new Promise((resolve, reject) => {
         json: {
             compositionID: song._id
         }
-    }).on('response', async stream => {
+    }).on('response', async file => {
       
+
         console.log(`Writing ${song.name} to tmpdisk...`);
       
-        stream.pipe(fs.createWriteStream(`tmp/${song.name}.mp3`));
+        var stream= file.pipe(fs.createWriteStream(`tmp/${song.name}.mp3`));
 
         stream.on("error", (err) => {
             reject(err);
         });
         stream.on("finish", async () => {
 
+            console.log(`Written ${song.name} to tmpdisk...`);
+          
             await upload({
                 host: process.env.FTP_HOST,
                 port: 21,
                 user: process.env.FTP_USER,
                 password: process.env.FTP_PASS,
             }, `tmp/${song.name}.mp3`, `${getDate()}/${song.name}.mp3`);
-
             resolve();
         });
 
