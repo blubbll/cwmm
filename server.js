@@ -77,16 +77,16 @@ const getCDNfiles = () => new Promise((resolve, reject) => {
                 if (err) return reject(err);
 
                 console.log(`[FTP-query] Listing songs...`)
-              
-              var files = [];
-              for(const i in list){
-                const entry = `https://${process.env.CDN}/${getDate()}/${list[i].name}`;
-                files.push(entry)
-              }
-               resolve(files);
+
+                var files = [];
+                for (const i in list) {
+                    const entry = `https://${process.env.CDN}/${getDate()}/${list[i].name}`;
+                    files.push(entry)
+                }
+                resolve(files);
             });
             c.end(); //end client
-           
+
         });
     });
     //general error
@@ -126,7 +126,7 @@ const get = async (song) => new Promise((resolve, reject) => {
 
             console.log(`[TMP] Written °${song.name}° to disk...`);
 
-            
+
             await upload({
                 host: process.env.FTP_HOST,
                 port: 21,
@@ -259,13 +259,15 @@ const pumpSongs = () => {
             //Songs löschen
             for (var key in json.compositions) {
                 const song = json.compositions[key];
-                console.log(`[AI] deleting °${song.name}°...`)
+                console.log(`[AI] Checking if °${song.name}° can be got...`)
 
                 if (song.isFinished) { //done
+                    console.log(`[AI] getting °${song.name}°...`)
                     await get(song);
+                    console.log(`[AI] deleting °${song.name}°...`)
                     await deleteSong(song);
                 }
-                 setTimeout(pumpSongs, 31999);
+                setTimeout(pumpSongs, 31999);
             }
         } else create(); //create new if not existing
     });
