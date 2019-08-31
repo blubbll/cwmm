@@ -51,7 +51,7 @@ const listener = app.listen(process.env.PORT, function() {
 
 const get = async (file) => new Promise((resolve, reject) => {
     request({
-        url: 'https://api.beta.aiva.ai/composition/play',
+        url: `https://${process.env.HOST}/composition/play`,
         method: 'POST',
         headers: {
             'content-type': 'application/json',
@@ -113,7 +113,7 @@ const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Pro
 
 const deleteSong = (id => new Promise(async (resolve, reject) => {
     request({
-        url: 'https://api.beta.aiva.ai/composition/delete',
+        url: `https://${process.env.HOST}/composition/delete`,
         method: 'POST',
         headers: {
             'content-type': 'application/json',
@@ -137,7 +137,7 @@ const deleteSong = (id => new Promise(async (resolve, reject) => {
 const create = () => new Promise(async (resolve, reject) => {
     if (quota.get() < 200)
         request({
-            url: 'https://api.beta.aiva.ai/composition/original/createFromPreset',
+            url: `https://${process.env.HOST}/composition/original/createFromPreset`,
             method: 'POST',
             headers: {
                 'content-type': 'application/json',
@@ -172,9 +172,11 @@ const create = () => new Promise(async (resolve, reject) => {
 });
 
 const pumpSongs = () => {
+  
+   console.log("geting status...")
+  
     request({
-        url: 'https://api.beta.aiva.ai/folder/getContent',
-        "referrer": "https://beta.aiva.ai/",
+        url: `https://${process.env.HOST}/folder/getContent`,
         method: 'POST',
         headers: {
             'content-type': 'application/json',
@@ -182,10 +184,11 @@ const pumpSongs = () => {
         },
         json: {
             folderID: "",
+            getSharedContent: false,
             token: process.env.TOKEN
         }
-    }), async (error, response, json) => {
-
+    }, async (error, res, json) => {
+        console.log(res)
         console.log("pumping songs")
 
         var i = 0;
@@ -217,13 +220,9 @@ const pumpSongs = () => {
           }
           
         } else create(); //create new if not existing
-    }
+    });
 };
 
 //create();
 //clearAll()
-setInterval(() => {
-    pumpSongs();
-}, 9999)
-
-//
+setInterval(pumpSongs, 9999);
