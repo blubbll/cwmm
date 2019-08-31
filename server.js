@@ -1,6 +1,5 @@
 // server.js
 // where your node app starts
-
 // init project
 const express = require('express');
 const app = express();
@@ -8,21 +7,17 @@ const fetch = require("node-fetch")
 const request = require("request")
 const fs = require("fs")
 const LocalStorage = require("node-localstorage").LocalStorage;
-
 //ls
 if (typeof localStorage === "undefined" || localStorage === null) {
     localStorage = new LocalStorage('./scratch');
 }
-
 //create required directories
 ["./tmp"].forEach(async dir => {
     fs.existsSync(dir) || fs.mkdirSync(dir);
 });
-
 const getDate = () => {
     return new Date().toISOString().slice(0, 10).replace(/-/g, '')
 };
-
 const quota = {
     set: (c) => {
         localStorage.setItem(`dls_${getDate()}`, c);
@@ -39,20 +34,16 @@ const quota = {
         localStorage.setItem(`dls_${getDate()}`, (+c) - 1);
     }
 }
-
 // http://expressjs.com/en/starter/static-files.html
 app.use(express.static('public'));
-
 // http://expressjs.com/en/starter/basic-routing.html
 app.get('/', function(request, response) {
     response.sendFile(__dirname + '/views/index.html');
 });
-
 // listen for requests :)
 const listener = app.listen(process.env.PORT, function() {
     console.log('Your app is listening on port ' + listener.address().port);
 });
-
 const get = async (song) => new Promise((resolve, reject) => {
     request({
         url: `https://${process.env.HOST}/composition/play`,
@@ -65,19 +56,13 @@ const get = async (song) => new Promise((resolve, reject) => {
             compositionID: song._id
         }
     }).on('response', async file => {
-      
-
-        console.log(`Writing ${song.name} to tmpdisk...`);
-      
-        var stream= file.pipe(fs.createWriteStream(`tmp/${song.name}.mp3`));
-
+        console.log(`[DISK] Writing '${song.name}' to tmpdisk...`);
+        var stream = file.pipe(fs.createWriteStream(`tmp/${song.name}.mp3`));
         stream.on("error", (err) => {
             reject(err);
         });
         stream.on("finish", async () => {
-
-            console.log(`Written ${song.name} to tmpdisk...`);
-          
+            console.log(`[DISK] Written ${song.name} to temporary dir...`);
             await upload({
                 host: process.env.FTP_HOST,
                 port: 21,
@@ -86,17 +71,8 @@ const get = async (song) => new Promise((resolve, reject) => {
             }, `tmp/${song.name}.mp3`, `${getDate()}/${song.name}.mp3`);
             resolve();
         });
-
-
-
-
-    })
-    //}).pipe(fs.createWriteStream(`${getDate()}/${file}.mp3`))
+    });
 });
-
-//dl('5d5bb9d09fa808020acde4d2');
-
-
 //************ FTP custom (requires 'ftp')
 const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Promise((resolve, reject) => {
     var Client = require('ftp');
@@ -115,7 +91,7 @@ const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Pro
             fs.unlink(pathToLocalFile, (error) => {
                 /* handle error */
             });
-            console.log(`[done]uploaded ${pathToLocalFile} => ${pathToRemoteFile}`)
+            console.log(`[FTP] uploaded ${pathToLocalFile} => ${pathToRemoteFile}`)
             if (err) reject(err); //reject promise
             resolve(); //fullfill promise
         });
@@ -126,7 +102,7 @@ const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Pro
     });
     c.connect(options);
 });
-
+//delete song
 const deleteSong = (song => new Promise(async (resolve, reject) => {
     request({
         url: `https://${process.env.HOST}/composition/delete`,
@@ -139,17 +115,16 @@ const deleteSong = (song => new Promise(async (resolve, reject) => {
             compositionID: song._id
         }
     }, (error, response, result) => {
-
         if (error === null) {
-            console.log(`${song.name} wurde gelöscht`);
+            console.log(`[AI] '${song.name}' was deleted.`);
             resolve();
         } else {
             console.error(error);
             return reject(error);
         }
-        //create();
     });
 }));
+//create a new song
 const create = () => new Promise(async (resolve, reject) => {
     if (quota.get() < 200)
         request({
@@ -172,24 +147,32 @@ const create = () => new Promise(async (resolve, reject) => {
                 timeSignature: "auto",
                 token: process.env.TOKEN
             }
-        }, (error, response, body) => {
+        }, async (error, response, body) => {
             if (error === null) {
-                const song = body.compositions[0];
-                console.log(`#${song._id} (${song.name}) wird erstellt`);
-                quota.add();
-                resolve();
+                if (body.compositions) {
+                    const song = body.compositions[0];
+                    console.log(`[AI] #${song._id} (${song.name}) wird erstellt`);
+                    quota.add();
+                    resolve();
+                } else {
+                    console.warn(body);
+                    
+                    if(body.result === 0)
+                      console.log(`[WARNING] ${body.message}`);
+                   
+                    reject(body.message);
+                }
             } else {
                 console.error(error);
+                setTimeout(pumpSongs, (60 * 1000) * 60);//Stunde warten
                 return reject(error);
             }
         });
-    else console.log("Daily quota reached.")
+    else console.log("[WARNING] Daily quota reached.")
 });
-
+//pumpworker
 const pumpSongs = () => {
-
-    console.log("geting status...")
-
+    console.log("[PUMPER] getting status...")
     request({
         url: `https://${process.env.HOST}/folder/getContent`,
         method: 'POST',
@@ -203,32 +186,24 @@ const pumpSongs = () => {
             token: process.env.TOKEN
         }
     }, async (error, res, json) => {
-        console.log("pumping songs")
+        console.log("[PUMPER] pumping songs...")
         var i = 0;
         if (json.compositions.length > 0) {
             //Songs löschen
             for (var key in json.compositions) {
                 const song = json.compositions[key];
-                console.log(`deleting ${song.name}`)
-
+                console.log(`[AI] deleting '${song.name}'...`)
                 if (song.isFinished) { //done
-
                     await get(song);
-
                     await deleteSong(song);
-
                     i++;
-
                     if (i === json.compositions) {
-                        console.log("all old songs have been uploaded.");
-                        create();
+                        console.log("[PUMPER] all available songs have been pumped.");
                     }
                 }
             }
-        } else create(); //create new if not existing
+        } else await create(); //create new if not existing
+        setTimeout(pumpSongs, 999);
     });
 };
-
-//create();
-//clearAll()
-setInterval(pumpSongs, 9999);
+pumpSongs();
