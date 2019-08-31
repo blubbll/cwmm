@@ -24,7 +24,7 @@ const getDate = () => {
 };
 
 const getHour = () => {
-  return `${getDate()}${new Date().toISOString().split("T")[1].slice(0, 5).replace(/:/g, '')}`;
+  return `${getDate()}${new Date().toISOString().split("T")[1].slice(0, 2)}`;
 }
 
 const quota = {
@@ -107,13 +107,13 @@ const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Pro
     var c = new Client();
     //on client ready, upload the file.
     c.on('ready', () => {
-        console.log(`[start]uploading ${pathToLocalFile} => ${pathToRemoteFile}`)
+        console.log(`[FTP] upload of ${pathToLocalFile} began...`)
         c.put(pathToLocalFile, pathToRemoteFile, function(err) {
             c.end(); //end client
             fs.unlink(pathToLocalFile, (error) => {
                 /* handle error */
             });
-            console.log(`[done]uploaded ${pathToLocalFile} => ${pathToRemoteFile}`)
+            console.log(`[FTP] Upload completed: ${pathToLocalFile} => ${pathToRemoteFile}`)
             if (err) reject(err); //reject promise
             resolve(); //fullfill promise
         });
@@ -139,7 +139,7 @@ const deleteSong = (song => new Promise(async (resolve, reject) => {
     }, (error, response, result) => {
 
         if (error === null) {
-            console.log(`${song.name} wurde gelöscht`);
+            console.log(`[AI] °${song.name}° was deleted on generating server.`);
             resolve();
         } else {
             console.error(error);
@@ -172,7 +172,7 @@ const create = () => new Promise(async (resolve, reject) => {
         }, (error, response, body) => {
             if (error === null) {
                 const song = body.compositions[0];
-                console.log(`#${song._id} (${song.name}) wird erstellt`);
+                console.log(`[AI] #${song._id} (${song.name}) is getting created...`);
                 quota.add();
                 resolve();
             } else {
@@ -191,7 +191,7 @@ const create = () => new Promise(async (resolve, reject) => {
 
 const pumpSongs = () => {
 
-    console.log(`[PUMPER] Refreshing state... Creation Quota: ${quota.get()} / ${quota.hourly}`)
+    console.log(`[PUMPER] Refreshing state... [Creation Quota: ${quota.get()}/${quota.hourly} for hour ${getHour()}]`)
 
     request({
         url: `https://${process.env.HOST}/folder/getContent`,
