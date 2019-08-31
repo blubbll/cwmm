@@ -124,7 +124,7 @@ const get = async (song) => new Promise((resolve, reject) => {
         });
         stream.on("finish", async () => {
 
-            console.log(`[TMP] Written °${song.name}° to disk...`);
+            console.log(`[TMP] Written °${song.name}° to disk. ✔️`);
 
 
             await upload({
@@ -151,13 +151,13 @@ const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Pro
     var c = new Client();
     //on client ready, upload the file.
     c.on('ready', () => {
-        console.log(`[FTP-upload] Upload of °${pathToLocalFile}° began...`)
+        console.log(`[FTP] Upload of °${pathToLocalFile}° began...`)
         c.put(pathToLocalFile, pathToRemoteFile, function(err) {
             c.end(); //end client
             fs.unlink(pathToLocalFile, (error) => {
                 /* handle error */
             });
-            console.log(`[FTP-upload] Upload completed: °${pathToLocalFile}° => °${pathToRemoteFile}°`)
+            console.log(`[FTP] Upload completed: °${pathToLocalFile}° => °${pathToRemoteFile}°`)
             if (err) reject(err); //reject promise
             resolve(); //fullfill promise
         });
@@ -238,7 +238,7 @@ const create = () => new Promise(async (resolve, reject) => {
 
 //Process songs on AI Server
 const pumpSongs = () => {
-    console.log(`[PUMPER] Refreshing state... [Creation Quota: ${quota.get()}/${quota.hourly} for hour ${getHour()}]`)
+    console.log(`[PUMPER] Refreshing state... [ℹ️Creation Quota: ${quota.get()}/${quota.hourly} for hour ${getHour()}]`)
     //get songs
     request({
         url: `https://${process.env.HOST}/folder/getContent`,
@@ -256,16 +256,17 @@ const pumpSongs = () => {
         console.log("[PUMPER] Processing songs...")
         //if songs have been generated already
         if (json.compositions && json.compositions.length > 0) {
-            //Songs löschen
+            //loop over songs
             for (var key in json.compositions) {
                 const song = json.compositions[key];
-                console.log(`[AI] Checking if °${song.name}° can be got...`)
-
+                console.log(`[AI] Checking if °${song.name}° can be processed...`)
+                //song done generating
                 if (song.isFinished) { //done
                     console.log(`[AI] getting °${song.name}°...`)
                     await get(song);
                     console.log(`[AI] deleting °${song.name}°...`)
                     await deleteSong(song);
+
                 }
                 setTimeout(pumpSongs, 31999);
             }
