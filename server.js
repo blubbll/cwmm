@@ -13,6 +13,8 @@ const fs = require("fs");
     fs.existsSync(dir) || fs.mkdirSync(dir);
 });
 
+const wait = require('util').promisify(setTimeout);
+
 const getDate = () => {
     return new Date().toISOString().slice(0, 10).replace(/-/g, '')
 };
@@ -245,9 +247,8 @@ const create = () => new Promise(async (resolve, reject) => {
         });
     else {
         console.log("⚠️[WARNING] Daily quota reached.");
-        setTimeout(() => {
-            // quota.reset();
-        }, 1000 * 60 * (60));
+        wait(60 * 1000 * 60 * (1))//wait an hour
+        pumpSongs();
     }
 });
 
@@ -287,7 +288,8 @@ const pumpSongs = async () => {
                 }
             }
         } else await create(); //create new if not existing
-        setTimeout(pumpSongs, 99999); //wait 1nd half a minute
+         wait(Math.floor(1.5 * 1000 * (60)));//wait 1 and half a minute
+         pumpSongs();
     });
 };
 
