@@ -47,7 +47,8 @@ const getCDNfiles = () => new Promise((resolve, reject) => {
     //on client ready, upload the file.
     c.on('ready', () => {
 
-        c.cwd(getDate(), (err, list) => {
+        //get dir of yesterday because the minig for that day should be finished already.
+        c.cwd(getDate()-1, (err, list) => {
             if (err) return reject(err);
             c.listSafe((err, list) => {
                 if (err) return reject(err);
@@ -133,7 +134,6 @@ const upload = async (credentials, pathToLocalFile, pathToRemoteFile) => new Pro
                 c.listSafe((err, list) => {
                     if (err) return reject(err);
                     quotaCurrent = list.length;
-                    console.log(list.length)
                 });
 
                 c.end(); //end client
@@ -171,7 +171,10 @@ const refreshQuota = async () => new Promise((resolve, reject) => {
             if (err) return reject(err);
             //update quota variable, based on actual daily processed items
             c.listSafe((err, list) => {
-                if (err) return reject(err);
+                if (err) {
+                  quotaCurrent = 0;
+                  return reject(err);
+                }
                 quotaCurrent = list.length;
                 console.log(`✔️[FTP] Quota updated: ${quotaCurrent}.`);
                 resolve();
@@ -233,7 +236,7 @@ const create = () => new Promise(async (resolve, reject) => {
         }, (error, response, body) => {
             if (error === null) {
                 const song = body.compositions[0];
-                console.log(`⏳[AI] #${song._id} (${song.name}) is getting created...`);
+                console.log(`⏳[AI] °#${song._id}° (${song.name}) is getting created...`);
                 resolve();
             } else {
                 console.error(`⚠️[WARNING] ${error}`);
@@ -249,7 +252,10 @@ const create = () => new Promise(async (resolve, reject) => {
 });
 
 //Process songs on AI Server
-const pumpSongs = () => {
+const pumpSongs = async () => {
+  
+    await refreshQuota();
+  
     console.log(`ℹ️[PUMPER] Refreshing state... [Creation Quota: ${quotaCurrent}/${quotaDaily} for day ${getDate()}]`)
     //get songs
     request({
@@ -281,12 +287,11 @@ const pumpSongs = () => {
                 }
             }
         } else await create(); //create new if not existing
-        setTimeout(pumpSongs, 31999);
+        setTimeout(pumpSongs, 99999); //wait 1nd half a minute
     });
 };
 
 //let's go
 [(async () => {
-    await refreshQuota();
     setTimeout(pumpSongs, 9999);
 })()];
