@@ -10,7 +10,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.16.4",
+    "express": "^4.17.3",
     "ftp": "^0.3.10",
     "node-fetch": "^2.6.0",
     "request": "^2.88.0"
